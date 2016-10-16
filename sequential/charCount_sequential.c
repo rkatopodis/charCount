@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void charCount(char c, long long int freq[]);
+void charIncrement(char c, long long int freq[]);
 void writeCount(FILE *fp, long long int freq[]);
 
 int main(int argc, char *argv[]) {
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 	}
 	// Parse input file contants
 	while((c = getc(input)) != EOF)
-		charCount(c, freq);
+		charIncrement(c, freq);
 
 	//Open and write to output file
 	output = fopen(argv[2], "w");
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
 	fclose(output);
 }
 
-void charCount(char c, long long int freq[]) {
+void charIncrement(char c, long long int freq[]) {
 	if((c >= '?' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= ';') 
 		|| (c >= '#' && c <= '&') || c == '!' || c == '.' || c == '_' || c == '-' || c == '(' || c == ')')
 		freq[c]++;
