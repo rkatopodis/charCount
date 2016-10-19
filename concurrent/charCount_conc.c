@@ -4,11 +4,13 @@
 
 void charIncrement(char c, long long int freq[]);
 void writeCount(FILE *fp, long long int freq[]);
-void* executa(void* tid);
+void* produtor(void* tid);
+void* consumidor(void* tid);
+FILE *input, *output;
+
 
 int main(int argc, char *argv[]) {
 	// Initialize variables and data structures
-	FILE *input, *output;
 	long long int freq[256] = {0};
 	char c;
 
@@ -60,8 +62,8 @@ int main(int argc, char *argv[]) {
 	}
 
 	// Parse input file contants
-	while((c = getc(input)) != EOF)
-		charIncrement(c, freq);
+	//while((c = getc(input)) != EOF)
+	//	charIncrement(c, freq);
 	
 	writeCount(output, freq);
 
@@ -74,10 +76,21 @@ int main(int argc, char *argv[]) {
 	pthread_exit(NULL);
 }
 
-void* executa(void* tid) {
+void* consumidor(void* tid) {
 	int id = * (int*) tid;
 	printf("Thread ID: %d\n", id);
+
 	pthread_exit(NULL);
+}
+
+void* produtor(void* tid) {
+	char c;
+	for (int i = 0; i < bufferSize && c = getc(input) != EOF; i++) {
+	//while((c = getc(input)) != EOF)
+	//	charIncrement(c, freq);
+		
+		
+	}
 }
 
 void charIncrement(char c, long long int freq[]) {
