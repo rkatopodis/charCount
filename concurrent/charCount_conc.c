@@ -147,6 +147,7 @@ void* consumidor(void* tid) {
 	int fim = inicio + bloco;
 	if (id == nthreads_cons - 1)
 		fim = bufferSize;
+	bloco = fim - inicio;
 	printf("inicio: %d, fim: %d, bloco: %d, thread: %d\n", inicio, fim, bloco, id + 1);
 
 	while (1) {
