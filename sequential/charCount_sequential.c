@@ -50,7 +50,8 @@ void charIncrement(char c, long long int freq[]) {
 
 // Write the character frequencies to the output file
 void writeCount(FILE *fp, long long int freq[]) {
-	int c, count;
+	long long int count;
+	int c;
 
 	fprintf(fp, "Caractere, Qtde\n");
 	for(c = 0; c < 256; c++)
