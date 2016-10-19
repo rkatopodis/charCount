@@ -2,12 +2,13 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#define _FILE_OFFSET_BITS 64 // Ensures that fsize is able to handle files larger than 2GB
+
 void charIncrement(char c, long long int freq[]);
 void writeCount(FILE *fp, long long int freq[]);
 void* produtor(void* tid);
 void* consumidor(void* tid);
 FILE *input, *output;
-
 
 int main(int argc, char *argv[]) {
 	// Initialize variables and data structures
@@ -88,7 +89,7 @@ void* produtor(void* tid) {
 	for (int i = 0; i < bufferSize && c = getc(input) != EOF; i++) {
 	//while((c = getc(input)) != EOF)
 	//	charIncrement(c, freq);
-		
+
 		
 	}
 }
