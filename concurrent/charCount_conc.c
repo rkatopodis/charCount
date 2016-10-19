@@ -31,9 +31,9 @@ int main(int argc, char *argv[]) {
 
 	GET_TIME(inicio);
 	// Validate command-line arguments
-	if (argc < 4) {
+	if (argc < 5) {
 		printf("Error: too few arguments\n");
-		printf("Usage: %s <input file> <output file> <number of threads consumidoras>\n", argv[0]);
+		printf("Usage: %s <input file> <output file> <number of threads consumidoras> <size of buffer>\n", argv[0]);
 		exit(1);
 	}
 	
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 
 	nthreads_cons = atoi(argv[3]);
 	//Initialize character buffer
-	bufferSize = 10; //this should be a parameter
+	bufferSize = atoi(argv[4]); //this should be a parameter
 	buffer = (char*) malloc(sizeof(char) * bufferSize);
 	isBlocoFull = (int*) malloc(sizeof(char) * nthreads_cons);
 	for (int i = 0; i < nthreads_cons; i++)
@@ -151,13 +151,13 @@ void* consumidor(void* tid) {
 	printf("inicio: %d, fim: %d, bloco: %d, thread: %d\n", inicio, fim, bloco, id + 1);
 
 	while (1) {
-		printf("T%d - C1\n", id + 1);
+		//printf("T%d - C1\n", id + 1);
 		pthread_mutex_lock(&mutex);
 		while (isBlocoFull[id] == false && fileEnded == 0) {
 			pthread_cond_wait(&cond_cons, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
-		printf("T%d - C2\n", id + 1);
+		//printf("T%d - C2\n", id + 1);
 
 		for (int i = inicio; i < fim && i < lastCharacter; i++) {
 			charIncrement(buffer[i], id);
@@ -166,14 +166,14 @@ void* consumidor(void* tid) {
 		}
 		
 		if (fileEnded == 1) break;
-		printf("T%d - C3\n", id + 1);
+		//printf("T%d - C3\n", id + 1);
 		pthread_mutex_lock(&mutex);
 		isBlocoFull[id] = false;
 		bufferCount -= bloco;
 		if (bufferCount == 0) pthread_cond_signal(&cond_prod);
-		printf("bufferCount: %d\n", bufferCount);
+		//printf("bufferCount: %d\n", bufferCount);
 		pthread_mutex_unlock(&mutex);
-		printf("T%d - C4\n", id + 1);
+		//printf("T%d - C4\n", id + 1);
 	}
 
 	printf(">> Thread consumidora #%d encerrada\n", id + 1);
@@ -184,13 +184,13 @@ void* produtor(void* tid) {
 	char c;
 	printf(">> Thread produtora iniciada\n");
 	while (1) {
-		printf("P1\n");
+		//printf("P1\n");
 		pthread_mutex_lock(&mutex);
 		while (bufferCount != 0) {
 			pthread_cond_wait(&cond_prod, &mutex);
 		}
 		pthread_mutex_unlock(&mutex);
-		printf("P2\n");
+		//printf("P2\n");
 
 		for (int i = 0; i < bufferSize; i++) {
 			c = getc(input);
@@ -203,17 +203,17 @@ void* produtor(void* tid) {
 			buffer[i] = c;
 		}
 
-		printf("P3\n");
+		//printf("P3\n");
 		//printBuffer();
 		pthread_mutex_lock(&mutex);
 		lastCharacter = bufferSize;
 		bufferCount = bufferSize;
 		for (int i = 0; i < nthreads_cons; i++)
 			isBlocoFull[i] = true;
-		printf("bufferCount: %d\n", bufferCount);
+		//printf("bufferCount: %d\n", bufferCount);
 		pthread_cond_broadcast(&cond_cons);
 		pthread_mutex_unlock(&mutex);
-		printf("P4\n");
+		//printf("P4\n");
 	}
 }
 
