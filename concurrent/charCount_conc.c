@@ -18,7 +18,7 @@ void* consumidor(void* tid);
 
 FILE *input, *output;
 int bufferSize, bufferCount = 0, lastCharacter;
-int fileEnded = 0, nthreads_cons, threads_cons_left = nthreads_cons;
+int fileEnded = 0, nthreads_cons, threads_cons_left;
 int* isBlocoFull;
 pthread_cond_t cond_cons, cond_prod; pthread_mutex_t mutex;
 char* buffer;
@@ -27,6 +27,7 @@ long long int freq_total[256] = {0};
 
 int main(int argc, char *argv[]) {
 	// Initialize variables and data structures
+	int i;
 	double inicio, fim;
 
 	GET_TIME(inicio);
@@ -52,15 +53,16 @@ int main(int argc, char *argv[]) {
 	}
 
 	nthreads_cons = atoi(argv[3]);
+	threads_cons_left = nthreads_cons;
 	//Initialize character buffer
 	bufferSize = atoi(argv[4]); //this should be a parameter
 	buffer = (char*) malloc(sizeof(char) * bufferSize);
 	isBlocoFull = (int*) malloc(sizeof(char) * nthreads_cons);
-	for (int i = 0; i < nthreads_cons; i++)
+	for (i = 0; i < nthreads_cons; i++)
 		isBlocoFull[i] = false;
 
 	freq = (long long int**) malloc(sizeof(long long int*) * nthreads_cons);
-	for (int i = 0; i < nthreads_cons; i++) {
+	for (i = 0; i < nthreads_cons; i++) {
 		freq[i] = (long long int*) malloc(sizeof(long long int) * 256);
 		for (int c = 0; c < 256; c++) {
 			freq[i][c] = 0;
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	int* tid;
-	for (int i = 0; i < nthreads_cons; i++) {
+	for (i = 0; i < nthreads_cons; i++) {
 		tid = (int*) malloc(sizeof(int));
 		*tid = i;
 
@@ -106,7 +108,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	//Join threads consumidoras
-	for (int i = 0; i < nthreads_cons; i++) {
+	for (i = 0; i < nthreads_cons; i++) {
 	     if (pthread_join(threads_cons[i], NULL)) {
 	        printf("Error: could not join threads consumidoras\n");
 	        exit(1);
@@ -141,6 +143,7 @@ int main(int argc, char *argv[]) {
 
 void* consumidor(void* tid) {
 	int id = * (int*) tid;
+	int i;
 	printf(">> Thread consumidora #%d iniciada\n", id + 1);
 	int bloco = bufferSize / nthreads_cons;
 	int inicio = id * bloco;
@@ -159,7 +162,7 @@ void* consumidor(void* tid) {
 		pthread_mutex_unlock(&mutex);
 		//printf("T%d - C2\n", id + 1);
 
-		for (int i = inicio; i < fim && i < lastCharacter; i++) {
+		for (i = inicio; i < fim && i < lastCharacter; i++) {
 			charIncrement(buffer[i], id);
 			buffer[i] = '_';
 			//printf("T%d: ", id + 1); printBuffer();
@@ -192,15 +195,13 @@ void* produtor(void* tid) {
 		pthread_mutex_unlock(&mutex);
 		//printf("P2\n");
 
-		for (int i = 0; i < bufferSize; i++) {
-			c = getc(input);
-			if (c == EOF) {
-				printf(">> Input file has been read.\n");
-				fileEnded = 1;
-				lastCharacter = i;
-				pthread_cond_broadcast(&cond_cons);
-				pthread_exit(NULL); }
-			buffer[i] = c;
+		int extractedQt = fread (buffer, sizeof(char), bufferSize, input);
+		if (extractedQt != bufferSize) {
+			printf(">> Input file has been read.\n");
+			fileEnded = 1;
+			lastCharacter = extractedQt;
+			pthread_cond_broadcast(&cond_cons);
+			pthread_exit(NULL);
 		}
 
 		//printf("P3\n");
@@ -219,7 +220,8 @@ void* produtor(void* tid) {
 
 void printBuffer() {
 	printf("[");
-	for (int i = 0; i < bufferSize; i++) {
+	int i;
+	for (i = 0; i < bufferSize; i++) {
 		printf("%c", buffer[i]);
 		if (i != bufferSize - 1)
 			printf(", ");
@@ -237,11 +239,11 @@ void charIncrement(char c, int id) {
 
 // Write the character frequencies to the output file
 void writeCount() {
-	int c; long long int count;
+	int c, i, d; long long int count;
 
-	for (int i = 0; i < nthreads_cons; i++) {
+	for (i = 0; i < nthreads_cons; i++) {
 		printf("Thread #%d - Resultados:\n", i + 1);
-		for (int d = 0; d < 256; d++) {
+		for (d = 0; d < 256; d++) {
 			if (freq[i][d] != 0) printf("%c, %lld\n", d, freq[i][d]);
 			freq_total[d] += freq[i][d];
 		}
