@@ -1,19 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/stat.h>
-
-#define _FILE_OFFSET_BITS 64 // Ensures that fsize is able to handle files larger than 2GB
+#include "timer.h"
 
 void charIncrement(char c, long long int freq[]);
 void writeCount(FILE *fp, long long int freq[]);
-off_t fsize(const char *fp);
-void printProgress(long long int currentCharCount, long long int size);
 
 int main(int argc, char *argv[]) {
 	// Initialize variables and data structures
 	FILE *input, *output;
 	long long int freq[256] = {0}, size, currentCharCount = 1;
 	char c;
+	double inicio, fim;
 
 	// Validate command-line arguments
 	if(argc < 3) {
@@ -23,39 +20,42 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 	
+	GET_TIME(inicio);
 	// Open input file
 	input = fopen(argv[1], "r");
 	if(input == NULL) {
 		printf("Error: enable to open input file\n");
 		exit(1);
 	}
-	// Determine file size
-	size = (long long int) fsize(argv[1]);
-	if(size == -1) {
-		printf("Enable to determine file size\n");
-		exit(1);
-	}
+	GET_TIME(fim);
+	
+	printf(">> Tempo de inicialização: %.8lf\n", fim - inicio);
+	GET_TIME(inicio);
 	// Parse input file contants
 	while((c = getc(input)) != EOF) {
-		// Print progress
-		printProgress(currentCharCount++, size);
-
 		charIncrement(c, freq);
 	}
-	printf("\n");
 
+	GET_TIME(fim);
+	printf(">> Tempo de leitura e processamento de entrada: %.8lf\n", fim - inicio);
+	GET_TIME(inicio);
 	//Open and write to output file
 	output = fopen(argv[2], "w");
 	if(output == NULL) {
 		printf("Error: enable to open output file\n");
 		exit(1);
 	}
-	
 	writeCount(output, freq);
+	
+	GET_TIME(fim);
+	printf(">> Tempo de escrita de saida: %.8lf\n", fim - inicio);
 
+	GET_TIME(inicio);
 	// Free memory
 	fclose(input);
 	fclose(output);
+	GET_TIME(fim);
+	printf(">> Tempo de finalização: %.8lf\n", fim - inicio);
 }
 
 void charIncrement(char c, long long int freq[]) {
@@ -73,19 +73,6 @@ void writeCount(FILE *fp, long long int freq[]) {
 	for(c = 0; c < 256; c++)
 		if((count = freq[c]) != 0)
 			fprintf(fp, "%c, %lld\n", c, count);
-}
-
-// Determine file size
-off_t fsize(const char *fp) {
-	struct stat st;
-
-	if(stat(fp, &st) == 0)
-		return st.st_size;
-
-	return -1;
-} 
-void printProgress(long long int currentCharCount, long long int size) {
-	printf("\r[%3d%%]", currentCharCount*100/size);
 }
 
 // Maps valid characters to the index of its frequency count (Indirect adressing option)
