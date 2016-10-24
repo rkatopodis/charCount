@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 #include "timer.h"
 
-#define TAMANHO_BUFFER 200000
+#define TAMANHO_BUFFER 100000
 #define true 1
 #define false 0
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
 
 	// Validação da entrada do programa
 	if (argc < 4) {
-		printf("Erro: número de argumentos incorreto.\n");
+		printf("Erro: número de argumentos insuficiente.\n");
 		printf("Uso: %s <arquivo de entrada> <arquivo de saída> <número de threads consumidoras>\n", argv[0]);
 		exit(1); }
 	
@@ -120,6 +120,7 @@ int main(int argc, char *argv[]) {
 	printf(">> Tempo de processamento: %.8lf\n", timeEnd - timeStart);
 	GET_TIME(timeStart);
 	
+	// Escreve no arquivo de saída
 	escreveFrequencia();
 
 	// Desalocação de memória alocada ao longo da execução
