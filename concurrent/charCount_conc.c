@@ -1,256 +1,248 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sys/stat.h>
 #include "timer.h"
 
-#define _FILE_OFFSET_BITS 64 // Ensures that fsize is able to handle files larger than 2GB
-#define VERDE 0
-#define AMARELO 1
-#define VERMELHO 2
+#define TAMANHO_BUFFER 200000
 #define true 1
 #define false 0
 
+off_t fsize(const char *fp);
 void charIncrement(char c, int id);
-void writeCount();
-void printBuffer();
+void escreveFrequencia();
 void* produtor(void* tid);
 void* consumidor(void* tid);
 
 FILE *input, *output;
-int bufferSize, bufferCount = 0, lastCharacter;
-int fileEnded = 0, nthreads_cons, threads_cons_left;
-int* isBlocoFull;
-pthread_cond_t cond_cons, cond_prod; pthread_mutex_t mutex;
+int caracteresLidos;
+int nthreads_cons, cons_restantes = 0;
+int arquivoEncerrado = false;
+int* blocoCheio;
+
+pthread_cond_t cond_cons, cond_prod;
+pthread_mutex_t mutex;
 char* buffer;
-long long int** freq;
+
+long long int** freq_parcial;
 long long int freq_total[256] = {0};
 
 int main(int argc, char *argv[]) {
-	// Initialize variables and data structures
-	int i;
-	double inicio, fim;
+	// Inicialização de variáveis da main
+	double timeStart, timeEnd; //variáveis para mensuração de tempo
+	long long int tamanhoArquivo; //tamanho do arquivo de entrada
+	pthread_t thread_prod; //thread produtora
+	pthread_t* threads_cons; //threads consumidoras
+	int* tid; //vetor de array de thread IDs
+	int i; //contador genérico
 
-	GET_TIME(inicio);
-	// Validate command-line arguments
-	if (argc < 5) {
-		printf("Error: too few arguments\n");
-		printf("Usage: %s <input file> <output file> <number of threads consumidoras> <size of buffer>\n", argv[0]);
-		exit(1);
-	}
+	GET_TIME(timeStart);
+
+	// Validação da entrada do programa
+	if (argc < 4) {
+		printf("Erro: número de argumentos incorreto.\n");
+		printf("Uso: %s <arquivo de entrada> <arquivo de saída> <número de threads consumidoras>\n", argv[0]);
+		exit(1); }
 	
-	// Open input file
+	// Validação e inicialização do arquivo de entrada
 	input = fopen(argv[1], "r");
 	if (input == NULL) {
-		printf("Error: unable to open input file\n");
-		exit(1);
-	}
+		printf("Erro: incapaz de abrir arquivo de entrada.\n");
+		exit(1); }
+	tamanhoArquivo = (long long int) fsize(argv[1]);
 
-	//Open and write to output file
+	// Validação e inicialização do arquivo de saída
 	output = fopen(argv[2], "w");
-	if(output == NULL) {
-		printf("Error: unable to open output file\n");
-		exit(1);
-	}
+	if (output == NULL) {
+		printf("Erro: incapaz de abrir arquivo de saída.\n");
+		exit(1); }
 
+	// Validação da entrada do número de threads
 	nthreads_cons = atoi(argv[3]);
-	threads_cons_left = nthreads_cons;
-	//Initialize character buffer
-	bufferSize = atoi(argv[4]); //this should be a parameter
-	buffer = (char*) malloc(sizeof(char) * bufferSize);
-	isBlocoFull = (int*) malloc(sizeof(char) * nthreads_cons);
+	blocoCheio = (int*) malloc(sizeof(int) * nthreads_cons);
 	for (i = 0; i < nthreads_cons; i++)
-		isBlocoFull[i] = false;
+		blocoCheio[i] = false;
 
-	freq = (long long int**) malloc(sizeof(long long int*) * nthreads_cons);
+	// Inicialização do vetor de frequências parciais
+	freq_parcial = (long long int**) malloc(sizeof(long long int*) * nthreads_cons);
 	for (i = 0; i < nthreads_cons; i++) {
-		freq[i] = (long long int*) malloc(sizeof(long long int) * 256);
-		for (int c = 0; c < 256; c++) {
-			freq[i][c] = 0;
-		}
+		freq_parcial[i] = (long long int*) malloc(sizeof(long long int) * 256);
+		for (int c = 0; c < 256; c++)
+			freq_parcial[i][c] = 0;
 	}
 
-	GET_TIME(fim);
-	printf(">> Tempo de inicialização: %.8lf\n", fim - inicio);
-	GET_TIME(inicio);
+	// Inicialização do tamanho do buffer, baseado no tamanho do arquivo de entrada
+	buffer = (char*) malloc(sizeof(char) * TAMANHO_BUFFER);
 
-	//Initialize thread produtora
-	pthread_t thread_prod;
+	GET_TIME(timeEnd);
+	printf(">> Tempo de inicialização: %.8lf\n", timeEnd - timeStart);
+	GET_TIME(timeStart);
+
+	// Inicialização das variáveis de condição e exclusão mútua
 	pthread_cond_init(&cond_cons, NULL);
 	pthread_cond_init(&cond_prod, NULL);
 	pthread_mutex_init(&mutex, NULL);
+
+	// Inicialização das thread produtora
 	if (pthread_create(&thread_prod, NULL, produtor, NULL)) {
-		printf("Error: could not create thread produtora\n");
+		printf("Erro: incapaz de criar thread produtora\n");
 		exit(1);
 	}
 
-	//Initialize threads consumidoras
-	pthread_t* threads_cons = (pthread_t*) malloc(sizeof(pthread_t) * nthreads_cons);
+	// Inicialização das threads consumidoras
+	threads_cons = (pthread_t*) malloc(sizeof(pthread_t) * nthreads_cons);
 	if (threads_cons == NULL) {
-		printf("Error: could not allocate memory for threads consumidoras\n");
-		exit(1);
-	}
+		printf("Erro: incapaz de alocar memória para thread produtora\n");
+		exit(1); }
 
-	int* tid;
 	for (i = 0; i < nthreads_cons; i++) {
 		tid = (int*) malloc(sizeof(int));
 		*tid = i;
 
 		if (pthread_create(&threads_cons[i], NULL, consumidor, (void*) tid)) {
-			printf("Error: could not create threads consumidoras\n");
-			exit(1);
-		}
+			printf("Erro: incapaz de criar threads consumidoras\n");
+			exit(1); }
 	}
 
-	//Join thread produtora
+	// Encerramento da thread produtora
 	if (pthread_join(thread_prod, NULL)) {
-		printf("Error: could not join thread produtora\n");
-		exit(1);
-	}
+		printf("Erro: incapaz de encerrar thread produtora\n");
+		exit(1); }
 
-	//Join threads consumidoras
+	// Encerramento das threads consumidoras
 	for (i = 0; i < nthreads_cons; i++) {
 	     if (pthread_join(threads_cons[i], NULL)) {
-	        printf("Error: could not join threads consumidoras\n");
-	        exit(1);
-	    }
+	        printf("Erro: incapaz de encerrar threads consumidoras\n");
+	        exit(1); }
 	}
 
-	GET_TIME(fim);
-	printf(">> Tempo de processamento: %.8lf\n", fim - inicio);
-	GET_TIME(inicio);
+	GET_TIME(timeEnd);
+	printf(">> Tempo de processamento: %.8lf\n", timeEnd - timeStart);
+	GET_TIME(timeStart);
 	
-	// Parse input file contants
-	//while((c = getc(input)) != EOF)
-	//	charIncrement(c, freq);
-	
-	writeCount();
+	escreveFrequencia();
 
-	// Free memory
+	// Desalocação de memória alocada ao longo da execução
 	fclose(input);
 	fclose(output);
 	free(threads_cons);
-	free(freq);
 	pthread_cond_destroy(&cond_cons);
 	pthread_cond_destroy(&cond_prod);
 	pthread_mutex_destroy(&mutex);
 
-	GET_TIME(fim);
-	printf(">> Tempo de finalização: %.8lf\n", fim - inicio);
+	for (i = 0; i < nthreads_cons; i++)
+		free(freq_parcial[i]);
+	free(freq_parcial);
+
+	GET_TIME(timeEnd);
+	printf(">> Tempo de finalização: %.8lf\n", timeEnd - timeStart);
 	
-	//Exit
+	// Encerramento do programa
 	pthread_exit(NULL);
 }
 
 void* consumidor(void* tid) {
 	int id = * (int*) tid;
 	int i;
-	printf(">> Thread consumidora #%d iniciada\n", id + 1);
-	int bloco = bufferSize / nthreads_cons;
-	int inicio = id * bloco;
-	int fim = inicio + bloco;
-	if (id == nthreads_cons - 1)
-		fim = bufferSize;
-	bloco = fim - inicio;
-	printf("inicio: %d, fim: %d, bloco: %d, thread: %d\n", inicio, fim, bloco, id + 1);
-
+	
+	printf(">> Thread consumidora #%d iniciada.\n", id + 1);
 	while (1) {
-		//printf("T%d - C1\n", id + 1);
+		// Thread consumidora entra em espera enquanto não houver nada para ela consumir
+		// ou o arquivo não tiver encerrado
 		pthread_mutex_lock(&mutex);
-		while (isBlocoFull[id] == false && fileEnded == 0) {
+		while (blocoCheio[id] == false && arquivoEncerrado == false)
 			pthread_cond_wait(&cond_cons, &mutex);
-		}
 		pthread_mutex_unlock(&mutex);
-		//printf("T%d - C2\n", id + 1);
 
-		for (i = inicio; i < fim && i < lastCharacter; i++) {
+		// Divisão do buffer em blocos e atribuição do próprio bloco
+		int bloco = caracteresLidos / nthreads_cons;
+		int inicio = id * bloco;
+		int fim = inicio + bloco;
+		if (id == nthreads_cons - 1)
+			fim = caracteresLidos;
+		bloco = fim - inicio;
+
+		// Incremento dos caracteres
+		for (i = inicio; i < fim; i++)
 			charIncrement(buffer[i], id);
-			buffer[i] = '_';
-			//printf("T%d: ", id + 1); printBuffer();
-		}
 		
-		if (fileEnded == 1) break;
-		//printf("T%d - C3\n", id + 1);
+		// Encerra o funcionamento caso o arquivo tenha sido completamente lido
+		if (arquivoEncerrado == true) break;
+
+		// Prepara para se bloquear e desbloqueia a thread produtora caso
+		// seja a última thread consumidora
 		pthread_mutex_lock(&mutex);
-		isBlocoFull[id] = false;
-		bufferCount -= bloco;
-		if (bufferCount == 0) pthread_cond_signal(&cond_prod);
-		//printf("bufferCount: %d\n", bufferCount);
+		blocoCheio[id] = false;
+		cons_restantes--;
+		if (cons_restantes == 0) pthread_cond_signal(&cond_prod);
 		pthread_mutex_unlock(&mutex);
-		//printf("T%d - C4\n", id + 1);
 	}
 
-	printf(">> Thread consumidora #%d encerrada\n", id + 1);
+	printf(">> Thread consumidora #%d encerrada.\n", id + 1);
 	pthread_exit(NULL);
 }
 
 void* produtor(void* tid) {
-	char c;
-	printf(">> Thread produtora iniciada\n");
+	printf(">> Thread produtora iniciada.\n");
 	while (1) {
-		//printf("P1\n");
+		// Thread produtora se bloqueia caso haja alguma thread consumidora 
+		// restante em execução		
 		pthread_mutex_lock(&mutex);
-		while (bufferCount != 0) {
+		while (cons_restantes != 0)
 			pthread_cond_wait(&cond_prod, &mutex);
-		}
 		pthread_mutex_unlock(&mutex);
-		//printf("P2\n");
 
-		int extractedQt = fread (buffer, sizeof(char), bufferSize, input);
-		if (extractedQt != bufferSize) {
-			printf(">> Input file has been read.\n");
-			fileEnded = 1;
-			lastCharacter = extractedQt;
+		// Preenche o buffer com TAMANHO_BUFFER caracteres do arquivo de entrada.
+		// Caso o arquivo de entrada tenha sido inteiramente lido, inicia o
+		// encerramento da aplicação.
+		int aux = fread (buffer, sizeof(char), TAMANHO_BUFFER, input);
+		if (aux != TAMANHO_BUFFER) {
+			printf(">> Thread produtora encerrada.\n");
+			caracteresLidos = aux;
+			arquivoEncerrado = true;
 			pthread_cond_broadcast(&cond_cons);
 			pthread_exit(NULL);
 		}
 
-		//printf("P3\n");
-		//printBuffer();
+		// Reinicia as variáveis para o funcionamento das threads consumidoras
 		pthread_mutex_lock(&mutex);
-		lastCharacter = bufferSize;
-		bufferCount = bufferSize;
+		caracteresLidos = TAMANHO_BUFFER;
+		cons_restantes = nthreads_cons;
 		for (int i = 0; i < nthreads_cons; i++)
-			isBlocoFull[i] = true;
-		//printf("bufferCount: %d\n", bufferCount);
+			blocoCheio[i] = true;
 		pthread_cond_broadcast(&cond_cons);
 		pthread_mutex_unlock(&mutex);
-		//printf("P4\n");
 	}
 }
 
-void printBuffer() {
-	printf("[");
-	int i;
-	for (i = 0; i < bufferSize; i++) {
-		printf("%c", buffer[i]);
-		if (i != bufferSize - 1)
-			printf(", ");
-	}
-	printf("]\n");
-}
-
+// Rotina de incremento de frequência de caracteres
 void charIncrement(char c, int id) {
 	if((c >= '?' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= ';') 
-		|| (c >= '#' && c <= '&') || c == '!' || c == '.' || c == '_' || c == '-' || c == '(' || c == ')') {
-		//printf("freq[%d][%c] = %lld\n", id, c, freq[id][c]);
-		freq[id][c]++;
-	}
+	|| (c >= '#' && c <= '&') || c == '!' || c == '.' || c == '_' || c == '-' || c == '(' || c == ')')
+		freq_parcial[id][c]++;
 }
 
-// Write the character frequencies to the output file
-void writeCount() {
-	int c, i, d; long long int count;
+// Escreve a frequência dos caracteres no arquivo de saída
+void escreveFrequencia() {
+	int i, d; long long int count;
 
-	for (i = 0; i < nthreads_cons; i++) {
-		printf("Thread #%d - Resultados:\n", i + 1);
-		for (d = 0; d < 256; d++) {
-			if (freq[i][d] != 0) printf("%c, %lld\n", d, freq[i][d]);
-			freq_total[d] += freq[i][d];
-		}
-	}
+	// Soma das frequências parciais
+	for (i = 0; i < nthreads_cons; i++)
+		for (d = 0; d < 256; d++)
+			freq_total[d] += freq_parcial[i][d];
 
 	fprintf(output, "Caractere, Qtde\n");
-	for (c = 0; c < 256; c++)
-		if ((count = freq_total[c]) != 0)
-			fprintf(output, "%c, %lld\n", c, count);
+	for (d = 0; d < 256; d++)
+		if ((count = freq_total[d]) != 0)
+			fprintf(output, "%c, %lld\n", d, count);
 }
+
+// Determina o tamanho do arquivo de entrada
+off_t fsize(const char *fp) {
+	struct stat st;
+
+	if(stat(fp, &st) == 0)
+		return st.st_size;
+
+	return -1;
+} 
