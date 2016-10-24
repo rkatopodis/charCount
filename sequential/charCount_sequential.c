@@ -2,15 +2,21 @@
 #include <stdlib.h>
 #include "timer.h"
 
+#define BUFFER_SIZE 100000
+#define FALSE 0
+#define TRUE 1
+
 void charIncrement(char c, long long int freq[]);
 void writeCount(FILE *fp, long long int freq[]);
 
 int main(int argc, char *argv[]) {
 	// Initialize variables and data structures
 	FILE *input, *output;
-	long long int freq[256] = {0}, size, currentCharCount = 1;
-	char c;
+	long long int freq[256] = {0};
 	double inicio, fim;
+	char buffer[BUFFER_SIZE] = {0};
+	int endOfFile = FALSE, charRead, i;
+
 
 	// Validate command-line arguments
 	if(argc < 3) {
@@ -32,8 +38,12 @@ int main(int argc, char *argv[]) {
 	printf(">> Tempo de inicialização: %.8lf\n", fim - inicio);
 	GET_TIME(inicio);
 	// Parse input file contants
-	while((c = getc(input)) != EOF) {
-		charIncrement(c, freq);
+	while(endOfFile == FALSE) {
+		charRead = fread(buffer, sizeof(char), BUFFER_SIZE, input);
+
+		if(charRead != BUFFER_SIZE) endOfFile = TRUE;
+		for(i = 0; i < charRead; i++)
+			charIncrement(buffer[i], freq);
 	}
 
 	GET_TIME(fim);
